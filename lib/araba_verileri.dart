@@ -71,7 +71,6 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   void dispose() {
-    // Controller'ları temizle
     minKmController.dispose();
     maxKmController.dispose();
     minPriceController.dispose();
@@ -125,14 +124,16 @@ class _MyHomePageState extends State<MyHomePage> {
         applyFilters();
       });
 
-      final baseUrl = 'https://www.arabam.com/ikinci-el/otomobil/hyundai-accent-1-3-admire?take=50';
+      final baseUrl =
+          'https://www.arabam.com/ikinci-el/otomobil/hyundai-accent-1-3-admire?take=50';
       final firstResponse = await http.get(Uri.parse(baseUrl));
 
       if (firstResponse.statusCode == 200) {
         final document = parse(firstResponse.body);
-        
+
         // Toplam ilan sayısını doğru selector ile al
-        final countElement = document.querySelector('#js-hook-for-advert-count');
+        final countElement =
+            document.querySelector('#js-hook-for-advert-count');
         int totalAds = 0;
         if (countElement != null) {
           String countText = countElement.text.trim();
@@ -148,10 +149,11 @@ class _MyHomePageState extends State<MyHomePage> {
           print('Sayfa $page çekiliyor...');
           final pageUrl = page == 1 ? baseUrl : '$baseUrl&page=$page';
           final response = await http.get(Uri.parse(pageUrl));
-          
+
           if (response.statusCode == 200) {
             final pageDocument = parse(response.body);
-            final carElements = pageDocument.querySelectorAll('tr.listing-list-item');
+            final carElements =
+                pageDocument.querySelectorAll('tr.listing-list-item');
 
             for (var element in carElements) {
               final titleElement = element
@@ -194,13 +196,15 @@ class _MyHomePageState extends State<MyHomePage> {
               }
 
               final listingDateElement = element
-                      .querySelector('.listing-text.tac .fade-out-content-wrapper')
+                      .querySelector(
+                          '.listing-text.tac .fade-out-content-wrapper')
                       ?.text
                       .trim() ??
                   '';
 
               final detailUrl =
-                  element.querySelector('a.link-overlay')?.attributes['href'] ?? '';
+                  element.querySelector('a.link-overlay')?.attributes['href'] ??
+                      '';
 
               String description = '';
               if (detailUrl.isNotEmpty) {
@@ -441,51 +445,38 @@ class _MyHomePageState extends State<MyHomePage> {
         ],
       ),
       drawer: FilterDrawer(
+        cars: cars,
+        onFiltersChanged: (List<Car> newFilteredCars) {
+          if (mounted) {
+            setState(() {
+              filteredCars = newFilteredCars;
+            });
+          }
+        },
+        selectedCities: selectedCities,
         minKmController: minKmController,
         maxKmController: maxKmController,
         minPriceController: minPriceController,
         maxPriceController: maxPriceController,
-        updateTextFieldValue: updateTextFieldValue,
-        applyFilters: applyFilters,
-        onMinKmChanged: (value) {
-          setState(() {
-            minKm = value;
-            applyFilters();
-          });
-        },
-        onMaxKmChanged: (value) {
-          setState(() {
-            maxKm = value;
-            applyFilters();
-          });
-        },
-        onMinPriceChanged: (value) {
-          setState(() {
-            minPrice = value;
-            applyFilters();
-          });
-        },
-        onMaxPriceChanged: (value) {
-          setState(() {
-            maxPrice = value;
-            applyFilters();
-          });
-        },
-        selectedCities: selectedCities,
-        availableCities: availableCities,
-        onCitiesChanged: (newSelection) {
-          setState(() {
-            selectedCities = newSelection;
-            applyFilters();
-          });
-        },
       ),
       body: RefreshIndicator(
         onRefresh: () async {
           await fetchCarData();
         },
         child: isLoading
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text(
+                      "Araba modelleri yükleniyor...",
+                      style: TextStyle(fontSize: 16),
+                    ),
+                  ],
+                ),
+              )
             : ListView.builder(
                 physics: const AlwaysScrollableScrollPhysics(),
                 itemCount: filteredCars.length,

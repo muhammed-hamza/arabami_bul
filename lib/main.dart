@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'brand_selection_page.dart';
 

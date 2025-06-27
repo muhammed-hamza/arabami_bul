@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' show parse;
 import 'car_list_page.dart'; // mevcut car_list_page'inizi import edin
-import 'main.dart';
 
 // Marka modeli
 class Brand {
@@ -26,11 +25,18 @@ class _BrandSelectionPageState extends State<BrandSelectionPage> {
   bool isLoading = true;
   List<Brand> brands = [];
   String searchQuery = '';
+  final _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     fetchBrands();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> fetchBrands() async {
@@ -50,20 +56,7 @@ class _BrandSelectionPageState extends State<BrandSelectionPage> {
 
         final document = parse(response.body);
 
-        // HTML içeriğini kontrol et
-        print(
-            'HTML içeriği: ${document.body?.text.substring(0, 1000)}'); // İlk 1000 karakteri göster
-
-        // Farklı selector'ler deneyelim
-        final facetContainer = document.querySelector('.facet-container');
-        final categoryFacet = document.querySelector('.category-facet');
-        final innerList = document.querySelector('.inner-list');
-
-        print('Facet Container bulundu: ${facetContainer != null}');
-        print('Category Facet bulundu: ${categoryFacet != null}');
-        print('Inner List bulundu: ${innerList != null}');
-
-        // Tüm olası selector'leri dene
+        // Marka ve alt marka elementlerini seç
         final brandElements = document.querySelectorAll('li a.list-item');
         print('Bulunan marka elementleri: ${brandElements.length}');
 
@@ -78,7 +71,6 @@ class _BrandSelectionPageState extends State<BrandSelectionPage> {
                 '0';
 
             print('İşlenen element:');
-            print('- HTML: ${element.outerHtml}');
             print('- İsim: $name');
             print('- URL: $url');
             print('- Sayı (ham): $countText');
@@ -86,8 +78,6 @@ class _BrandSelectionPageState extends State<BrandSelectionPage> {
             // Sayıyı temizle ve parse et
             final count =
                 int.tryParse(countText.replaceAll(RegExp(r'[^\d]'), '')) ?? 0;
-
-            print('- Sayı (parse edilmiş): $count');
 
             if (name.isNotEmpty &&
                 url.isNotEmpty &&
@@ -99,6 +89,9 @@ class _BrandSelectionPageState extends State<BrandSelectionPage> {
                 count: count,
               ));
               print('Marka eklendi: $name ($count)');
+
+              // Alt markaları çek
+              await fetchSubModels(url);
             }
           } catch (e) {
             print('Element işlenirken hata: $e');
@@ -132,6 +125,64 @@ class _BrandSelectionPageState extends State<BrandSelectionPage> {
         .toList();
   }
 
+  Future<void> fetchSubModels(String url) async {
+    try {
+      final response = await http.get(
+        Uri.parse('https://www.arabam.com${url}'),
+        headers: {
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final document = parse(response.body);
+
+        // Alt modelleri seçmek için doğru CSS seçiciyi kullanın
+        final subModelElements = document.querySelectorAll(
+            '.category-list-wrapper .inner-list > li > a.list-item');
+
+        if (subModelElements.isEmpty) {
+          // Alternatif bir seçici deneyin
+          final alternativeElements = document.querySelectorAll(
+              'div[ss-container="true"] .inner-list > li > a.list-item');
+
+          print('\nAlt Modeller (Alternatif):');
+          for (var element in alternativeElements) {
+            final name = element.querySelector('.list-name')?.text.trim() ?? '';
+            final modelUrl = element.attributes['href'] ?? '';
+            final countText =
+                element.querySelector('.count')?.text.trim() ?? '0';
+            final count =
+                int.tryParse(countText.replaceAll(RegExp(r'[^\d]'), '')) ?? 0;
+
+            if (name.isNotEmpty) {
+              print('Model: $name - İlan Sayısı: $count - URL: $modelUrl');
+            }
+          }
+        } else {
+          print('\nAlt Modeller:');
+          for (var element in subModelElements) {
+            final name = element.querySelector('.list-name')?.text.trim() ?? '';
+            final modelUrl = element.attributes['href'] ?? '';
+            final countText =
+                element.querySelector('.count')?.text.trim() ?? '0';
+            final count =
+                int.tryParse(countText.replaceAll(RegExp(r'[^\d]'), '')) ?? 0;
+
+            if (name.isNotEmpty) {
+              print('Model: $name - İlan Sayısı: $count - URL: $modelUrl');
+            }
+          }
+        }
+      } else {
+        print('HTTP isteği başarısız: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Alt modeller çekilirken hata oluştu: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -144,6 +195,7 @@ class _BrandSelectionPageState extends State<BrandSelectionPage> {
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: TextField(
+              controller: _searchController,
               decoration: const InputDecoration(
                 labelText: 'Marka Ara',
                 prefixIcon: Icon(Icons.search),
@@ -172,8 +224,12 @@ class _BrandSelectionPageState extends State<BrandSelectionPage> {
                             fontSize: 14,
                           ),
                         ),
-                        onTap: () {
-                          Navigator.push(
+                        onTap: () async {
+                          // Önce alt modelleri çek ve yazdır
+                          await fetchSubModels(brand.url);
+
+                          // Sonra CarListPage'e git ve geri dönülmesini bekle
+                          await Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (context) => CarListPage(
@@ -182,6 +238,12 @@ class _BrandSelectionPageState extends State<BrandSelectionPage> {
                               ),
                             ),
                           );
+
+                          // Geri dönüldüğünde arama alanını temizle
+                          setState(() {
+                            searchQuery = '';
+                            _searchController.clear();
+                          });
                         },
                       );
                     },

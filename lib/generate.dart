@@ -1,13 +1,16 @@
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'main.dart';
-import 'dart:convert';  
+import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' as parser;
 import 'araba_verileri.dart';
-import 'package:arabami_bul/car.dart'; 
+import 'package:arabami_bul/car.dart';
 
-const String GEMINI_API_KEY = "AIzaSyDAnlpGN6L0WSrhdLzfe7q8TPYpWVAtk1g";
+//"AIzaSyDAnlpGN6L0WSrhdLzfe7q8TPYpWVAtk1g"
+
+const String GEMINI_API_KEY = "AIzaSyAAjE_Tpxoqx44DBMNe5Vj4g6ONySqIH8E";
 Future<String?> ModelFunction(List<Car> cars) async {
+  
   try {
     print('Yapay zeka analizi başlıyor...');
     print('Toplam analiz edilecek ilan sayısı: ${cars.length}');
@@ -25,45 +28,51 @@ Future<String?> ModelFunction(List<Car> cars) async {
     print('İlanlar birleştirildi, API\'ye gönderiliyor...');
 
     final response = await http.post(
-      Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=$GEMINI_API_KEY'),
+      Uri.parse(
+          'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$GEMINI_API_KEY'),
       headers: {
         'Content-Type': 'application/json',
       },
       body: jsonEncode({
-        'contents': [{
-          'parts': [{
-            'text': '''
+        'contents': [
+          {
+            'parts': [
+              {
+                'text': '''
               Sen bir araç alım-satım uzmanısın. Verilen araç ilanlarını detaylı bir şekilde analiz et ve alıcılar için kapsamlı bir rapor hazırla.
-              
+              DEĞERLENDİRME TARİHİ diye bir şey yazma.
+              önerdiğin araçları söylerken kaç numaralı ilan olduğunu söyle.
               Şu başlıklar altında değerlendirme yap:
               
-              1. GENEL PAZAR ANALİZİ
+              1. ÖNERDİĞİM ARABALAR:
+              
+              2. GENEL PAZAR ANALİZİ
               - İlanların genel fiyat aralığı
               - Ortalama model yılı ve kilometre
               - Fiyat/performans değerlendirmesi
               
-              2. ÖNE ÇIKAN İLANLAR
+              3. ÖNE ÇIKAN İLANLAR
               - En iyi fiyat/performans oranına sahip 2-3 ilan
               - Bu ilanların neden öne çıktığına dair açıklama
               
-              3. DİKKAT EDİLMESİ GEREKEN NOKTALAR
+              4. DİKKAT EDİLMESİ GEREKEN NOKTALAR
               - Boya/değişen durumları
               - Kilometre analizi
               - Fiyat sapmaları
-              
-              4. TAVSİYELER
+
+              5. TAVSİYELERİM
               - Hangi ilanların değerlendirmeye alınması gerektiği
               - Pazarlık payı ve dikkat edilmesi gereken noktalar
               - Alım için en uygun zamanla ilgili öneriler
-
-              5. SENİN ÖNERDİĞİN ARABALARI SIRALA
               
               İşte analiz edilecek ilanlar:
               
               $carDetails
             '''
-          }]
-        }],
+              }
+            ]
+          }
+        ],
         'generationConfig': {
           'temperature': 0.7,
           'maxOutputTokens': 2000,
@@ -76,12 +85,12 @@ Future<String?> ModelFunction(List<Car> cars) async {
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       final analysis = data['candidates'][0]['content']['parts'][0]['text'];
-      
+
       print('YAPAY ZEKA ANALİZİ:');
       print('------------------');
       print(analysis);
       print('------------------');
-      
+
       return analysis;
     } else {
       print('API hatası: ${response.statusCode}');
@@ -93,17 +102,22 @@ Future<String?> ModelFunction(List<Car> cars) async {
     return null;
   }
 }
+
 Future<String> fetchUrlContent(String url) async {
   final headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+    'Accept':
+        'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
   };
-  
+
   final res = await http.get(Uri.parse(url));
   final body = res.body;
   final document = parser.parse(body);
-  var response = document.getElementsByClassName("listing-table-wrapper")[0].getElementsByClassName("listing-list-item should-hover bg-white")[1].
-  attributes["listing-price"];
+  var response = document
+      .getElementsByClassName("listing-table-wrapper")[0]
+      .getElementsByClassName("listing-list-item should-hover bg-white")[1]
+      .attributes["listing-price"];
   var priceElement = document.querySelector(".listing-price");
   print("araba verileri: ${response.toString()}");
 

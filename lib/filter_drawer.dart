@@ -1,322 +1,244 @@
 import 'package:flutter/material.dart';
+import 'car.dart';
 
-class FilterDrawer extends StatelessWidget {
+class FilterDrawer extends StatefulWidget {
+  final List<Car> cars;
+  final Function(List<Car>) onFiltersChanged;
+  final Set<String> selectedCities;
   final TextEditingController minKmController;
   final TextEditingController maxKmController;
   final TextEditingController minPriceController;
   final TextEditingController maxPriceController;
-  final Function(TextEditingController, String, Function(double)) updateTextFieldValue;
-  final Function() applyFilters;
-  final Function(double) onMinKmChanged;
-  final Function(double) onMaxKmChanged;
-  final Function(double) onMinPriceChanged;
-  final Function(double) onMaxPriceChanged;
-  final Set<String> selectedCities;
-  final Set<String> availableCities;
-  final Function(Set<String>) onCitiesChanged;
-
-  // Türkiye'nin illeri
-  static const List<String> turkiyeIlleri = [
-    'Adana', 'Adıyaman', 'Afyonkarahisar', 'Ağrı', 'Aksaray', 'Amasya',
-    'Ankara', 'Antalya', 'Ardahan', 'Artvin', 'Aydın', 'Balıkesir',
-    'Bartın', 'Batman', 'Bayburt', 'Bilecik', 'Bingöl', 'Bitlis',
-    'Bolu', 'Burdur', 'Bursa', 'Çanakkale', 'Çankırı', 'Çorum',
-    'Denizli', 'Diyarbakır', 'Düzce', 'Edirne', 'Elazığ', 'Erzincan',
-    'Erzurum', 'Eskişehir', 'Gaziantep', 'Giresun', 'Gümüşhane', 'Hakkâri',
-    'Hatay', 'Iğdır', 'Isparta', 'İstanbul', 'İzmir', 'Kahramanmaraş',
-    'Karabük', 'Karaman', 'Kars', 'Kastamonu', 'Kayseri', 'Kilis',
-    'Kırıkkale', 'Kırklareli', 'Kırşehir', 'Kocaeli', 'Konya', 'Kütahya',
-    'Malatya', 'Manisa', 'Mardin', 'Mersin', 'Muğla', 'Muş',
-    'Nevşehir', 'Niğde', 'Ordu', 'Osmaniye', 'Rize', 'Sakarya',
-    'Samsun', 'Şanlıurfa', 'Siirt', 'Sinop', 'Sivas', 'Şırnak',
-    'Tekirdağ', 'Tokat', 'Trabzon', 'Tunceli', 'Uşak', 'Van',
-    'Yalova', 'Yozgat', 'Zonguldak'
-  ];
 
   const FilterDrawer({
     Key? key,
+    required this.cars,
+    required this.onFiltersChanged,
+    required this.selectedCities,
     required this.minKmController,
     required this.maxKmController,
     required this.minPriceController,
     required this.maxPriceController,
-    required this.updateTextFieldValue,
-    required this.applyFilters,
-    required this.onMinKmChanged,
-    required this.onMaxKmChanged,
-    required this.onMinPriceChanged,
-    required this.onMaxPriceChanged,
-    required this.selectedCities,
-    required this.availableCities,
-    required this.onCitiesChanged,
   }) : super(key: key);
+
+  @override
+  State<FilterDrawer> createState() => _FilterDrawerState();
+}
+
+class _FilterDrawerState extends State<FilterDrawer> {
+  void applyFilters() {
+    final filteredCars = widget.cars.where((car) {
+      // KM filtreleme
+      if (widget.minKmController.text.isNotEmpty ||
+          widget.maxKmController.text.isNotEmpty) {
+        // Arabanın km değerini temizle ve sayıya çevir
+        final carKm = double.tryParse(car.km
+                .replaceAll('km', '')
+                .replaceAll('.', '')
+                .replaceAll(' ', '')
+                .trim()) ??
+            0;
+
+        // Minimum km kontrolü
+        if (widget.minKmController.text.isNotEmpty) {
+          final minKm = double.tryParse(
+                  widget.minKmController.text.replaceAll('.', '')) ??
+              0;
+          if (carKm < minKm) return false;
+        }
+
+        // Maximum km kontrolü
+        if (widget.maxKmController.text.isNotEmpty) {
+          final maxKm = double.tryParse(
+                  widget.maxKmController.text.replaceAll('.', '')) ??
+              0;
+          if (carKm > maxKm) return false;
+        }
+      }
+
+      // Şehir filtreleme
+      if (widget.selectedCities.isNotEmpty &&
+          !widget.selectedCities.contains(car.city)) {
+        return false;
+      }
+
+      // Fiyat filtreleme
+      if (widget.minPriceController.text.isNotEmpty ||
+          widget.maxPriceController.text.isNotEmpty) {
+        final carPrice = double.tryParse(car.price
+                .replaceAll('TL', '')
+                .replaceAll('.', '')
+                .replaceAll(' ', '')
+                .trim()) ??
+            0;
+
+        if (widget.minPriceController.text.isNotEmpty) {
+          final minPrice = double.tryParse(
+                  widget.minPriceController.text.replaceAll('.', '')) ??
+              0;
+          if (carPrice < minPrice) return false;
+        }
+
+        if (widget.maxPriceController.text.isNotEmpty) {
+          final maxPrice = double.tryParse(
+                  widget.maxPriceController.text.replaceAll('.', '')) ??
+              0;
+          if (carPrice > maxPrice) return false;
+        }
+      }
+
+      return true;
+    }).toList();
+
+    widget.onFiltersChanged(filteredCars);
+  }
+
+  void _formatInput(TextEditingController controller) {
+    String text = controller.text.replaceAll('.', '');
+    if (text.isEmpty) {
+      return;
+    }
+
+    // Format the number with thousand separators
+    String newText = '';
+    while (text.length > 3) {
+      newText = '.${text.substring(text.length - 3)}$newText';
+      text = text.substring(0, text.length - 3);
+    }
+    newText = text + newText;
+
+    // Update the controller and cursor position
+    if (newText != controller.text) {
+      final selection = controller.selection;
+      final newPosition =
+          selection.baseOffset + (newText.length - controller.text.length);
+      controller.value = controller.value.copyWith(
+        text: newText,
+        selection: TextSelection.collapsed(offset: newPosition),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Drawer(
-      child: Column(
+      child: ListView(
+        padding: EdgeInsets.zero,
         children: [
           DrawerHeader(
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.inversePrimary,
+              color: Theme.of(context).colorScheme.primary,
             ),
-            child: const Center(
-              child: Text(
-                'Filtreleme Seçenekleri',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
+            child: const Text(
+              'Filtreler',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 24,
               ),
             ),
           ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(16.0),
+          // Kilometre Filtresi
+          const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text('Kilometre Aralığı'),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Row(
               children: [
-                const Text(
-                  'Kilometre Aralığı',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: minKmController,
-                  decoration: const InputDecoration(
-                    labelText: 'Min KM',
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.number,
-                  onChanged: (value) {
-                    updateTextFieldValue(
-                      minKmController,
-                      value,
-                      onMinKmChanged,
-                    );
-                  },
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: maxKmController,
-                  decoration: const InputDecoration(
-                    labelText: 'Max KM',
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.number,
-                  onChanged: (value) {
-                    updateTextFieldValue(
-                      maxKmController,
-                      value,
-                      onMaxKmChanged,
-                    );
-                  },
-                ),
-                const SizedBox(height: 24),
-                const Text(
-                  'Fiyat Aralığı',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: minPriceController,
-                  decoration: const InputDecoration(
-                    labelText: 'Min Fiyat',
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.number,
-                  onChanged: (value) {
-                    updateTextFieldValue(
-                      minPriceController,
-                      value,
-                      onMinPriceChanged,
-                    );
-                  },
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: maxPriceController,
-                  decoration: const InputDecoration(
-                    labelText: 'Max Fiyat',
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.number,
-                  onChanged: (value) {
-                    updateTextFieldValue(
-                      maxPriceController,
-                      value,
-                      onMaxPriceChanged,
-                    );
-                  },
-                ),
-                const SizedBox(height: 24),
-                const Text(
-                  'İller',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton(
-                  onPressed: () {
-                    Set<String> tempSelection = Set.from(selectedCities);
-                    String searchQuery = ''; // Arama metni için değişken
-
-                    showDialog(
-                      context: context,
-                      builder: (BuildContext context) {
-                        return StatefulBuilder(
-                          builder: (context, setDialogState) {
-                            // Arama sorgusuna göre illeri filtrele
-                            List<String> filteredCities = turkiyeIlleri.where((city) {
-                              return city
-                                  .toLowerCase()
-                                  .contains(searchQuery.toLowerCase());
-                            }).toList();
-
-                            return AlertDialog(
-                              title: Column(
-                                children: [
-                                  const Text('İl Seçimi'),
-                                  const SizedBox(height: 8),
-                                  TextField(
-                                    decoration: const InputDecoration(
-                                      hintText: 'İl Ara...',
-                                      prefixIcon: Icon(Icons.search),
-                                      border: OutlineInputBorder(),
-                                    ),
-                                    onChanged: (value) {
-                                      setDialogState(() {
-                                        searchQuery = value; // Arama metnini güncelle
-                                      });
-                                    },
-                                  ),
-                                ],
-                              ),
-                              content: SizedBox(
-                                width: double.maxFinite,
-                                height: 300,
-                                child: ListView.builder(
-                                  shrinkWrap: true,
-                                  itemCount: filteredCities.length, // Filtrelenmiş listeyi kullan
-                                  itemBuilder: (context, index) {
-                                    final city = filteredCities[index]; // Filtrelenmiş listeden al
-                                    final isSelected = tempSelection.contains(city);
-                                    return CheckboxListTile(
-                                      title: Text(city),
-                                      value: isSelected,
-                                      onChanged: (bool? value) {
-                                        setDialogState(() {
-                                          if (value == true) {
-                                            tempSelection.add(city);
-                                          } else {
-                                            tempSelection.remove(city);
-                                          }
-                                        });
-                                        onCitiesChanged(tempSelection);
-                                        applyFilters();
-                                      },
-                                    );
-                                  },
-                                ),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () {
-                                    tempSelection.clear();
-                                    onCitiesChanged(tempSelection);
-                                    applyFilters();
-                                    Navigator.pop(context);
-                                  },
-                                  child: const Text('Temizle'),
-                                ),
-                                TextButton(
-                                  onPressed: () {
-                                    Navigator.pop(context);
-                                  },
-                                  child: const Text('Tamam'),
-                                ),
-                              ],
-                            );
-                          },
-                        );
-                      },
-                    );
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          selectedCities.isEmpty 
-                              ? 'İl Seçin' 
-                              : selectedCities.length == 1 
-                                  ? selectedCities.first 
-                                  : '${selectedCities.length} il seçildi',
-                          style: TextStyle(
-                            color: selectedCities.isEmpty 
-                                ? Colors.grey 
-                                : Theme.of(context).textTheme.bodyLarge?.color,
-                          ),
-                        ),
-                        const Icon(Icons.arrow_drop_down),
-                      ],
+                Expanded(
+                  child: TextField(
+                    controller: widget.minKmController,
+                    decoration: const InputDecoration(
+                      labelText: 'Min KM',
+                      hintText: 'Örn: 50000',
                     ),
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) {
+                      _formatInput(widget.minKmController);
+                      applyFilters();
+                    },
                   ),
                 ),
-                if (selectedCities.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: Wrap(
-                      spacing: 8.0,
-                      runSpacing: 4.0,
-                      children: selectedCities.map((city) {
-                        return Chip(
-                          label: Text(city),
-                          onDeleted: () {
-                            Set<String> newSelection = Set.from(selectedCities);
-                            newSelection.remove(city);
-                            onCitiesChanged(newSelection);
-                          },
-                        );
-                      }).toList(),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: TextField(
+                    controller: widget.maxKmController,
+                    decoration: const InputDecoration(
+                      labelText: 'Max KM',
+                      hintText: 'Örn: 150000',
                     ),
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) {
+                      _formatInput(widget.maxKmController);
+                      applyFilters();
+                    },
                   ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: () {
-                    // Filtreleri sıfırla
-                    minKmController.clear();
-                    maxKmController.clear();
-                    minPriceController.clear();
-                    maxPriceController.clear();
-                    
-                    onMinKmChanged(0);
-                    onMaxKmChanged(500000);
-                    onMinPriceChanged(0);
-                    onMaxPriceChanged(1000000);
-                    onCitiesChanged({}); // İl filtrelerini temizle
-                    
-                    applyFilters();
-                    Navigator.pop(context);
-                  },
-                  child: const Text('Filtreleri Sıfırla'),
-                ),
-                const SizedBox(height: 8),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
-                  child: const Text('Uygula'),
                 ),
               ],
             ),
           ),
+          // Fiyat Filtresi
+          const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text('Fiyat Aralığı'),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: widget.minPriceController,
+                    decoration: const InputDecoration(
+                      labelText: 'Min Fiyat',
+                    ),
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) {
+                      _formatInput(widget.minPriceController);
+                      applyFilters();
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: TextField(
+                    controller: widget.maxPriceController,
+                    decoration: const InputDecoration(
+                      labelText: 'Max Fiyat',
+                    ),
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) {
+                      _formatInput(widget.maxPriceController);
+                      applyFilters();
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Şehir Filtresi
+          const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text('Şehirler'),
+          ),
+          ...widget.cars
+              .map((car) => car.city)
+              .toSet()
+              .map((city) => CheckboxListTile(
+                    title: Text(city),
+                    value: widget.selectedCities.contains(city),
+                    onChanged: (bool? value) {
+                      setState(() {
+                        if (value == true) {
+                          widget.selectedCities.add(city);
+                        } else {
+                          widget.selectedCities.remove(city);
+                        }
+                      });
+                      applyFilters();
+                    },
+                  )),
         ],
       ),
     );

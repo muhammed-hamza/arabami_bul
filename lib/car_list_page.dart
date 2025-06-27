@@ -6,6 +6,19 @@ import 'car.dart';
 import 'recommended_cars_page.dart';
 import 'test_page.dart';
 import 'generate.dart';
+import 'filter_drawer.dart';
+
+class SubModel {
+  final String name;
+  final String url;
+  final String count; // İlan sayısı
+
+  SubModel({
+    required this.name,
+    required this.url,
+    required this.count,
+  });
+}
 
 class CarListPage extends StatefulWidget {
   final String title;
@@ -22,17 +35,86 @@ class CarListPage extends StatefulWidget {
 }
 
 class _CarListPageState extends State<CarListPage> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   List<Car> cars = [];
   List<Car> filteredCars = [];
   bool isLoading = false;
+  bool isAIAnalysisLoading = false;
   Set<int> expandedCards = {};
   Set<String> selectedCities = {};
   Set<String> availableCities = {};
+  List<SubModel> subModels = [];
+  final TextEditingController minKmController = TextEditingController();
+  final TextEditingController maxKmController = TextEditingController();
+  final TextEditingController minPriceController = TextEditingController();
+  final TextEditingController maxPriceController = TextEditingController();
+  RangeValues? kmRange;
+  RangeValues? priceRange;
+  Map<String, bool> expandedModels = {}; // Alt modellerin açık/kapalı durumu
 
   @override
   void initState() {
     super.initState();
+    fetchSubModels();
     fetchCarData();
+  }
+
+  @override
+  void dispose() {
+    minKmController.dispose();
+    maxKmController.dispose();
+    minPriceController.dispose();
+    maxPriceController.dispose();
+    super.dispose();
+  }
+
+  Future<void> fetchSubModels() async {
+    try {
+      final baseUrl = widget.baseUrl.startsWith('http')
+          ? widget.baseUrl
+          : 'https://www.arabam.com${widget.baseUrl}';
+
+      final response = await http.get(
+        Uri.parse(baseUrl),
+        headers: {
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final document = parse(response.body);
+        List<SubModel> models = [];
+
+        // Alt modelleri çek
+        final modelElements = document
+            .querySelectorAll('.category-list-wrapper .inner-list > li');
+        for (var element in modelElements) {
+          final linkElement = element.querySelector('a');
+          if (linkElement != null) {
+            final name =
+                linkElement.querySelector('.list-name')?.text.trim() ?? '';
+            final url = linkElement.attributes['href'] ?? '';
+            final countText = linkElement.text.replaceAll(name, '').trim();
+            final count = RegExp(r'\d+').firstMatch(countText)?.group(0) ?? '0';
+
+            if (name.isNotEmpty && url.isNotEmpty) {
+              models.add(SubModel(
+                name: name,
+                url: url,
+                count: count,
+              ));
+            }
+          }
+        }
+
+        setState(() {
+          subModels = models;
+        });
+      }
+    } catch (e) {
+      print('Alt model çekme hatası: $e');
+    }
   }
 
   Future<void> fetchCarData() async {
@@ -41,49 +123,52 @@ class _CarListPageState extends State<CarListPage> {
     });
 
     try {
-      final baseUrl = widget.baseUrl.startsWith('http') 
-          ? widget.baseUrl 
+      final baseUrl = widget.baseUrl.startsWith('http')
+          ? widget.baseUrl
           : 'https://www.arabam.com${widget.baseUrl}';
-          
-      print('Başlang��ç URL: $baseUrl');
-      
+
+      print('Başlangıç URL: $baseUrl');
+
       final response = await http.get(
         Uri.parse(baseUrl),
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         },
       );
 
       if (response.statusCode == 200) {
         final document = parse(response.body);
-        
+
         // Toplam ilan sayısını doğru selector ile al
         final countElement = document.querySelector('#js-hook-for-total-count');
         int totalAds = 0;
         if (countElement != null) {
           String countText = countElement.text.trim();
-          totalAds = int.tryParse(countText.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+          totalAds =
+              int.tryParse(countText.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
           print('Toplam ilan sayısı: $totalAds');
         } else {
           // Alternatif selector dene
           final altCountElement = document.querySelector('.listing-text span');
           if (altCountElement != null) {
             String countText = altCountElement.text.trim();
-            totalAds = int.tryParse(countText.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+            totalAds =
+                int.tryParse(countText.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
             print('Toplam ilan sayısı (alternatif): $totalAds');
           }
         }
 
         int totalPages = (totalAds / 50).ceil();
         print('Toplam sayfa sayısı: $totalPages');
-        
+
         // En az 1 sayfa olmalı
         totalPages = totalPages > 0 ? totalPages : 1;
-        
+
         List<Car> tempCars = [];
 
         for (int page = 1; page <= totalPages; page++) {
-          final pageUrl = page == 1 
+          final pageUrl = page == 1
               ? baseUrl
               : '$baseUrl${baseUrl.contains('?') ? '&' : '?'}page=$page';
 
@@ -92,24 +177,42 @@ class _CarListPageState extends State<CarListPage> {
           final pageResponse = await http.get(
             Uri.parse(pageUrl),
             headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+              'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             },
           );
 
           if (pageResponse.statusCode == 200) {
             final pageDocument = parse(pageResponse.body);
-            final carElements = pageDocument.querySelectorAll('.listing-list-item');
+            final carElements =
+                pageDocument.querySelectorAll('.listing-list-item');
             print('Bulunan ilan sayısı: ${carElements.length}');
 
             for (var element in carElements) {
               try {
-                final titleElement = element.querySelector('.listing-text-new.listing-title-lines')?.text.trim() ?? '';
-                final priceElement = element.querySelector('.listing-price')?.text.trim() ?? '';
-                final yearElement = element.querySelectorAll('.listing-text .fade-out-content-wrapper')[0]?.text.trim() ?? '';
-                final kmElement = element.querySelectorAll('.listing-text .fade-out-content-wrapper')[1]?.text.trim() ?? '';
-                
+                final titleElement = element
+                        .querySelector('.listing-text-new.listing-title-lines')
+                        ?.text
+                        .trim() ??
+                    '';
+                final priceElement =
+                    element.querySelector('.listing-price')?.text.trim() ?? '';
+                final yearElement = element
+                        .querySelectorAll(
+                            '.listing-text .fade-out-content-wrapper')[0]
+                        ?.text
+                        .trim() ??
+                    '';
+                final kmElement = element
+                        .querySelectorAll(
+                            '.listing-text .fade-out-content-wrapper')[1]
+                        ?.text
+                        .trim() ??
+                    '';
+
                 String colorElement = '';
-                final colorElements = element.querySelectorAll('.listing-text .fade-out-content-wrapper');
+                final colorElements = element.querySelectorAll(
+                    '.listing-text .fade-out-content-wrapper');
                 if (colorElements.length > 2) {
                   colorElement = colorElements[2].text.trim();
                 }
@@ -122,13 +225,22 @@ class _CarListPageState extends State<CarListPage> {
                   cityElement = '$city $district'.trim();
                 }
 
-                final listingDateElement = element.querySelector('.listing-text.tac .fade-out-content-wrapper')?.text.trim() ?? '';
-                final detailUrl = element.querySelector('a.link-overlay')?.attributes['href'] ?? '';
+                final listingDateElement = element
+                        .querySelector(
+                            '.listing-text.tac .fade-out-content-wrapper')
+                        ?.text
+                        .trim() ??
+                    '';
+                final detailUrl = element
+                        .querySelector('a.link-overlay')
+                        ?.attributes['href'] ??
+                    '';
 
                 String description = '';
                 if (detailUrl.isNotEmpty) {
                   try {
-                    description = await fetchCarDescription('https://www.arabam.com$detailUrl');
+                    description = await fetchCarDescription(
+                        'https://www.arabam.com$detailUrl');
                   } catch (e) {
                     print('Detay bilgisi çekilirken hata: $e');
                   }
@@ -195,18 +307,21 @@ class _CarListPageState extends State<CarListPage> {
         }
 
         String expertInfo = '';
-        final expertDiv = document.querySelector('.expert-information-container');
+        final expertDiv =
+            document.querySelector('.expert-information-container');
         if (expertDiv != null) {
           String expertText = expertDiv.text;
 
-          if (expertText.isNotEmpty && !expertText.contains('Ekspertiz bilgisi bulunamadı')) {
+          if (expertText.isNotEmpty &&
+              !expertText.contains('Ekspertiz bilgisi bulunamadı')) {
             final lines = expertText
                 .split('\n')
                 .map((line) => line.trim())
-                .where((line) => line.isNotEmpty && 
-                    !line.contains('arabam.com') && 
-                    !line.contains('Ekspertiz') && 
-                    !line.contains('Paketleri') && 
+                .where((line) =>
+                    line.isNotEmpty &&
+                    !line.contains('arabam.com') &&
+                    !line.contains('Ekspertiz') &&
+                    !line.contains('Paketleri') &&
                     !line.contains('Şubeleri'))
                 .toList();
 
@@ -243,9 +358,53 @@ class _CarListPageState extends State<CarListPage> {
   void applyFilters() {
     setState(() {
       filteredCars = cars.where((car) {
-        final cityMatch = selectedCities.isEmpty ||
-            selectedCities.contains(car.city.split(' ')[0]);
-        return cityMatch;
+        // KM filtreleme
+        if (minKmController.text.isNotEmpty ||
+            maxKmController.text.isNotEmpty) {
+          final carKm = double.tryParse(car.km
+                  .replaceAll('km', '')
+                  .replaceAll('.', '')
+                  .replaceAll(' ', '')
+                  .trim()) ??
+              0;
+
+          if (minKmController.text.isNotEmpty) {
+            final minKm = double.tryParse(minKmController.text) ?? 0;
+            if (carKm < minKm) return false;
+          }
+          if (maxKmController.text.isNotEmpty) {
+            final maxKm = double.tryParse(maxKmController.text) ?? 0;
+            if (carKm > maxKm) return false;
+          }
+        }
+
+        // Fiyat filtreleme
+        if (minPriceController.text.isNotEmpty ||
+            maxPriceController.text.isNotEmpty) {
+          final carPrice = double.tryParse(car.price
+                  .replaceAll('TL', '')
+                  .replaceAll('.', '')
+                  .replaceAll(' ', '')
+                  .trim()) ??
+              0;
+
+          if (minPriceController.text.isNotEmpty) {
+            final minPrice = double.tryParse(minPriceController.text) ?? 0;
+            if (carPrice < minPrice) return false;
+          }
+
+          if (maxPriceController.text.isNotEmpty) {
+            final maxPrice = double.tryParse(maxPriceController.text) ?? 0;
+            if (carPrice > maxPrice) return false;
+          }
+        }
+
+        // Şehir filtreleme
+        if (selectedCities.isNotEmpty && !selectedCities.contains(car.city)) {
+          return false;
+        }
+
+        return true;
       }).toList();
     });
   }
@@ -253,16 +412,17 @@ class _CarListPageState extends State<CarListPage> {
   void onAIAnalysisPressed() async {
     setState(() {
       isLoading = true;
+      isAIAnalysisLoading = true;
     });
 
     try {
       print('AI analizi başlatılıyor...');
       final analysis = await ModelFunction(filteredCars);
       print('AI analizi tamamlandı');
-      
+
       if (analysis != null) {
         if (!mounted) return;
-        
+
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -282,12 +442,14 @@ class _CarListPageState extends State<CarListPage> {
       print('AI analizi sırasında hata: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Yapay zeka analizi sırasında hata oluştu')),
+        const SnackBar(
+            content: Text('Yapay zeka analizi sırasında hata oluştu')),
       );
     } finally {
       if (mounted) {
         setState(() {
           isLoading = false;
+          isAIAnalysisLoading = false;
         });
       }
     }
@@ -296,125 +458,169 @@ class _CarListPageState extends State<CarListPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title + "  " + filteredCars.length.toString()),
+        leading: IconButton(
+          icon: const Icon(Icons.home),
+          onPressed: () {
+            Navigator.of(context).popUntil((route) => route.isFirst);
+          },
+          tooltip: 'Ana Sayfa',
+        ),
+        title: Text(widget.title),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.filter_list),
+            onPressed: () {
+              _scaffoldKey.currentState?.openDrawer();
+            },
+            tooltip: 'Filtrele',
+          ),
           IconButton(
             icon: const Icon(Icons.analytics),
             onPressed: isLoading ? null : onAIAnalysisPressed,
             tooltip: 'AI Analizi',
           ),
-          IconButton(
-            icon: const Icon(Icons.science),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const TestPage()),
-              );
-            },
-            tooltip: 'Test Sayfası',
-          ),
         ],
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          await fetchCarData();
+      drawer: FilterDrawer(
+        cars: cars,
+        onFiltersChanged: (List<Car> newFilteredCars) {
+          if (mounted) {
+            setState(() {
+              filteredCars = newFilteredCars;
+            });
+          }
         },
-        child: isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : ListView.builder(
-                physics: const AlwaysScrollableScrollPhysics(),
-                itemCount: filteredCars.length,
-                itemBuilder: (context, index) {
-                  final car = filteredCars[index];
-                  final isExpanded = expandedCards.contains(index);
-
-                  return Card(
-                    margin: const EdgeInsets.all(8.0),
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onTap: () {
-                        setState(() {
-                          if (isExpanded) {
-                            expandedCards.remove(index);
-                          } else {
-                            expandedCards.add(index);
-                          }
-                        });
-                      },
-                      child: Column(
-                        children: [
-                          ListTile(
-                            title: Text(
-                              car.title,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const SizedBox(height: 8),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text('${car.year} | ${car.km}'),
-                                    Text(
-                                      car.price,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.green,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    if (car.color.isNotEmpty)
-                                      Text(
-                                        car.color,
-                                        style: const TextStyle(color: Colors.grey),
-                                      ),
-                                    if (car.color.isNotEmpty && car.city.isNotEmpty)
-                                      const Text(' | ',
-                                          style: TextStyle(color: Colors.grey)),
-                                    if (car.city.isNotEmpty)
-                                      Text(
-                                        car.city,
-                                        style: const TextStyle(color: Colors.grey),
-                                      ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  car.listingDate,
-                                  style: const TextStyle(
-                                    color: Colors.grey,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            trailing: Icon(
-                              isExpanded ? Icons.expand_less : Icons.expand_more,
-                              color: Colors.grey,
-                            ),
+        selectedCities: selectedCities,
+        minKmController: minKmController,
+        maxKmController: maxKmController,
+        minPriceController: minPriceController,
+        maxPriceController: maxPriceController,
+      ),
+      body: isLoading
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text(
+                    isAIAnalysisLoading
+                        ? "Yapay zeka değerlendiriyor..."
+                        : "Araba verileri yükleniyor...",
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                ],
+              ),
+            )
+          : ListView.builder(
+              itemCount: filteredCars.length,
+              itemBuilder: (context, index) {
+                final car = filteredCars[index];
+                return Card(
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: ExpansionTile(
+                    title: Text(
+                      car.title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Text(car.year),
+                            const Text(' | '),
+                            Text(car.km),
+                            const Text(' | '),
+                            Text(car.city),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          car.price,
+                          style: const TextStyle(
+                            color: Colors.green,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
                           ),
-                          if (isExpanded && car.description.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Text(car.description),
-                            ),
-                        ],
+                        ),
+                      ],
+                    ),
+                    children: [
+                      if (car.color.isNotEmpty || car.description.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (car.color.isNotEmpty)
+                                Text('Renk: ${car.color}'),
+                              if (car.description.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Text(car.description),
+                              ],
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              },
+            ),
+    );
+  }
+
+  // Alt modelleri gösteren widget
+  Widget _buildSubModels(String brandName, List<SubModel> models) {
+    return ExpansionTile(
+      title: Text(
+        brandName,
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 16,
+        ),
+      ),
+      onExpansionChanged: (expanded) {
+        setState(() {
+          expandedModels[brandName] = expanded;
+        });
+      },
+      children: models
+          .map((model) => ListTile(
+                title: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(model.name),
+                    Text(
+                      model.count,
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => CarListPage(
+                        title: '${widget.title} ${model.name}',
+                        baseUrl: model.url,
                       ),
                     ),
                   );
                 },
-              ),
-      ),
+              ))
+          .toList(),
     );
   }
 }
-

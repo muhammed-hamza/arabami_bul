@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'car.dart';
+import 'filter_drawer.dart';
 
 class RecommendedCarsPage extends StatelessWidget {
   final List<Car> recommendedCars;
@@ -10,6 +12,32 @@ class RecommendedCarsPage extends StatelessWidget {
     required this.recommendedCars,
     required this.aiAnalysis,
   }) : super(key: key);
+
+  Future<void> _launchURL(BuildContext context, String url) async {
+    try {
+      final Uri uri = Uri.parse("https://www.arabam.com" + url);
+      if (!await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      )) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Link açılamadı. Lütfen daha sonra tekrar deneyin.'),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Hata oluştu: $e'),
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +92,7 @@ class RecommendedCarsPage extends StatelessWidget {
                 itemCount: recommendedCars.length,
                 itemBuilder: (context, index) {
                   final car = recommendedCars[index];
+                  print('Açılmaya çalışılan URL: ${car.detailUrl}');
                   return Card(
                     margin: const EdgeInsets.only(bottom: 12),
                     elevation: 2,
@@ -90,13 +119,24 @@ class RecommendedCarsPage extends StatelessWidget {
                           color: Colors.grey[600],
                         ),
                       ),
-                      trailing: Text(
-                        car.price,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green,
-                          fontSize: 16,
-                        ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            car.price,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(Icons.link, color: Colors.blue),
+                            onPressed: () => _launchURL(context, car.detailUrl),
+                            tooltip: 'İlana Git',
+                          ),
+                        ],
                       ),
                       children: [
                         Padding(
@@ -111,6 +151,12 @@ class RecommendedCarsPage extends StatelessWidget {
                               Text(
                                 car.description,
                                 style: const TextStyle(height: 1.4),
+                              ),
+                              const SizedBox(height: 12),
+                              OutlinedButton.icon(
+                                icon: const Icon(Icons.open_in_new),
+                                label: const Text('İlanı Tarayıcıda Aç'),
+                                onPressed: () => _launchURL(context, car.detailUrl),
                               ),
                             ],
                           ),
